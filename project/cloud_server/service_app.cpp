@@ -97,14 +97,14 @@ int main()
 						g_state.relay_mask&=~mask;
 				}
 				memcpy(g_cmd,UDP_HEADER,3);
-				g_cmd[3]=0;
+				g_cmd[3]=1;
 				g_cmd[4]=1;
 				memcpy(g_cmd+5,g_buf+1,16);
 				sendto(serverSocket,g_cmd,32,0,(struct sockaddr*)&pi_addr,pi_addr_len);
 				break;
 			case 2: // read relay
 				memcpy(g_cmd,UDP_HEADER,3);
-				g_cmd[3]=0;
+				g_cmd[3]=1;
 				g_cmd[4]=1;
 				g_cmd[5]=2;
 				g_cmd[6]=(unsigned char)(0xff&g_state.relay_mask);
@@ -113,13 +113,20 @@ int main()
 				break;
 			case 3: // read temperature and wetness
 				memcpy(g_cmd,UDP_HEADER,3);
-				g_cmd[3]=0;
+				g_cmd[3]=1;
 				g_cmd[4]=1;
 				g_cmd[5]=3;
 				g_cmd[6]=g_state.temperature&0xff;
 				g_cmd[7]=(g_state.temperature>>8)&0xff;
 				g_cmd[8]=g_state.wetness&0xff;
 				g_cmd[9]=(g_state.temperature>>8)&0xff;
+				sendto(serverSocket,g_cmd,32,0,(struct sockaddr*)&pi_addr,pi_addr_len);
+				break;
+				case 4: // fish food delivery
+				memcpy(g_cmd,UDP_HEADER,3);
+				g_cmd[3]=1;
+				g_cmd[4]=1;
+				g_cmd[5]=4;
 				sendto(serverSocket,g_cmd,32,0,(struct sockaddr*)&pi_addr,pi_addr_len);
 				break;
 			default:

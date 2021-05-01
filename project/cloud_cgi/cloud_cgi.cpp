@@ -12,6 +12,26 @@
 const unsigned char UDP_HEADER[3]={'I','a','n'}; 
 char g_buf[1024];
 char g_udp[256];
+int send_udp(char *buf, int len, bool waitResponse);
+
+void print_cmd(char *buf)
+{
+	printf("cmd:");
+	for(int i=0;i<16;i++)
+		printf("%02x ",(unsigned char)buf[i]);
+	printf("\ncmd:");
+	for(int i=16;i<32;i++)
+		printf("%02x ",(unsigned char)buf[i]);
+	printf("\n");
+}
+
+int bytes_to_int(char *buf)
+{
+	int ret=(unsigned char)(buf[1]);
+	ret<<=8;
+	ret+=(unsigned char)(buf[0]);
+	return ret;
+}
  
 int main(int argc, char*argv[])
 {
@@ -24,6 +44,9 @@ int main(int argc, char*argv[])
     printf("Content-type:application/json\r\n");     /*从stdout中输出，告诉Web服务器返回的信息类型*/
     printf("\r\n");                                           /*插入一个空行，结束头部信息*/
     pRequestMethod = getenv("REQUEST_METHOD");
+#ifdef X86_SIM
+	printf("request method:%s\n",pRequestMethod);
+#endif
      if (strcasecmp(pRequestMethod,"POST")==0)
     {
         // printf("<p>OK the method is POST!\n</p>");
@@ -50,32 +73,32 @@ int main(int argc, char*argv[])
 			switch(cmd->valueint)
 			{
 			case 1:// set relay state
-				memcpy(g_cmd,UDP_HEADER,3);
-				g_cmd[3]=0;
-				g_cmd[4]=1;
-				g_cmd[5]=1;
+				memcpy(g_udp,UDP_HEADER,3);
+				g_udp[3]=0;
+				g_udp[4]=1;
+				g_udp[5]=1;
 				cmd_data=cJSON_GetObjectItem(root,"data");
-				g_cmd[6]=(unsigned char)cmd_data[0];
-				g_cmd[7]=(unsigned char)cmd_data[1];
-				send_udp(g_cmd,16,false);
+				g_udp[6]=(unsigned char)(cJSON_GetArrayItem(cmd_data,0)->valueint);
+				g_udp[7]=(unsigned char)(cJSON_GetArrayItem(cmd_data,1)->valueint);
+				send_udp(g_udp,16,false);
 				printf("{\"ret_code\"=0}\n");
 				break;
 			case 2:
-				memcpy(g_cmd,UDP_HEADER,3);
-				g_cmd[3]=0;
-				g_cmd[4]=1;
-				g_cmd[5]=2;
-				ret_len=send_udp(g_cmd,32,true);
+				memcpy(g_udp,UDP_HEADER,3);
+				g_udp[3]=0;
+				g_udp[4]=1;
+				g_udp[5]=2;
+				ret_len=send_udp(g_udp,32,true);
 				if(ret_len>=32)
 				{
-					int relay_mask=g_cmd[6]+g_cmd[7]*256;
+					int relay_mask=bytes_to_int(g_udp+6);
 					printf("{");
 					printf("\"ret_code\"=0,");
 					printf("\"cmd\"=2,");
 					printf("\"data\"=[");
 					for(int i=0;i<7;i++)
-						printf("%d,",(relay_mask&(1<<i)));
-					printf("%d]",(relay_mask&(1<<7)));
+						printf("%d,",((relay_mask>>i)&1));
+					printf("%d]",((relay_mask>>7)&1));
 					printf("}\n");
 				}
 				else
@@ -84,15 +107,15 @@ int main(int argc, char*argv[])
 				}
 				break;
 			case 3:
-				memcpy(g_cmd,UDP_HEADER,3);
-				g_cmd[3]=0;
-				g_cmd[4]=1;
-				g_cmd[5]=2;
-				ret_len=send_udp(g_cmd,32,true);
+				memcpy(g_udp,UDP_HEADER,3);
+				g_udp[3]=0;
+				g_udp[4]=1;
+				g_udp[5]=3;
+				ret_len=send_udp(g_udp,32,true);
 				if(ret_len>=32)
 				{
-					int temperature=g_cmd[6]+g_cmd[7]*256;
-					int wetness=g_cmd[8]+g_cmd[9]*256;
+					int temperature=bytes_to_int(g_udp+6);
+					int wetness=bytes_to_int(g_udp+8);
 					printf("{");
 					printf("\"ret_code\"=0,");
 					printf("\"cmd\"=3,");
@@ -103,6 +126,14 @@ int main(int argc, char*argv[])
 				{
 					printf("{\"ret_code\"=-1}\n");
 				}
+				break;
+			case 4: // fish food delivery
+				memcpy(g_udp,UDP_HEADER,3);
+				g_udp[3]=0;
+				g_udp[4]=1;
+				g_udp[5]=4;
+				ret_len=send_udp(g_udp,32,false);
+				printf("{\"ret_code\"=0}\n");
 				break;
 			default:
 				; // unknown cmd
@@ -127,7 +158,9 @@ int send_udp(char *buf, int len, bool waitResponse)
 	remoteaddr.sin_family = AF_INET;
 	remoteaddr.sin_port = htons(PORT);
 	remoteaddr.sin_addr.s_addr =inet_addr(addr);
- 
+#ifdef X86_SIM
+ 	printf("send packet\n");
+#endif 	
 	if(-1==(sendto(clientSocket,buf,len,0, (struct sockaddr *)&remoteaddr,addrlen=sizeof(remoteaddr))))
     {
     	close(clientSocket);
@@ -136,7 +169,14 @@ int send_udp(char *buf, int len, bool waitResponse)
 	
 	if(waitResponse)
 	{
-		buflen=recvfrom(clientSocket,buf,sizeof(buf),0,(struct sockaddr *)&remoteaddr,&addrlen);
+#ifdef X86_SIM
+		printf("packet sent\n");
+		printf("wait for response\n");
+#endif	
+		buflen=recvfrom(clientSocket,buf,32,0,(struct sockaddr *)&remoteaddr,(socklen_t*)&addrlen);
+#ifdef X86_SIM
+		print_cmd(buf);
+#endif		
 		close(clientSocket);
 		return buflen;
 	}

@@ -8,9 +8,12 @@
 #include <stdio.h> 
 #include <errno.h> 
 #include <string.h>
+#ifndef X86_SIM
 #include <wiringPi.h>
 #include <wiringSerial.h>
-
+#else
+#include <x86sim.h>
+#endif
 #define PORT 3501
 #define SERVER_IP	"47.117.1.147"
 #define UART_DEV	"/dev/ttyS0"
@@ -33,6 +36,7 @@ struct tag_board_state {
 } g_state;
 
 void process_udp_cmd(char *buf, int len);
+int send_udp(char *buf, int len, bool waitResponse);
 void init_uart_cmd(char *data)
 {
 	memset(data,0,16);
@@ -71,13 +75,12 @@ bool check_uart_cmd(char *data)
 }
 int main(int argc, char*argv[])
 {
-	struct timeval{
-	    long tv_sec; // seconds
-	    long tv_usec; // microseconds
-    } wait_time;
+	struct timeval wait_time;
 	int g_sock,buflen,addrlen,peerlen;
 	char addr[]="127.0.0.1";
 	struct sockaddr_in addr_from;
+	fd_set read_fds;
+	int ret;
 	memset(&g_state,0,sizeof(g_state));
  	if(wiringPiSetup() < 0)
  		return -1;
@@ -104,6 +107,7 @@ int main(int argc, char*argv[])
 		fill_uart_cmd_check(g_temp);
 		write(g_uart,g_temp,16);
 	 	// read status from adrduino
+	 	FD_ZERO(&read_fds);
 	 	FD_SET(g_uart,&read_fds);
 	 	wait_time.tv_sec=5;
 	 	wait_time.tv_usec=0;
@@ -151,13 +155,13 @@ int main(int argc, char*argv[])
 	int loop_state=0;
 	while(1)
     {
-        memset(buff,0,sizeof(buff));
+        FD_ZERO(&read_fds);
         FD_SET(g_sock,&read_fds);
         FD_SET(g_uart,&read_fds);
-        FD_SET(g_sock,&exception_fds);
+        //  FD_SET(g_sock,&exception_fds);
         wait_time.tv_sec=5;
 	 	wait_time.tv_usec=0;
-        ret = select(g_uart+1,&read_fds,NULL,&exception_fds,&wait_time);
+        ret = select(g_uart+1,&read_fds,NULL,NULL,&wait_time);
         if(ret < 0)
         {
             printf("Fail to select!\n");
@@ -188,9 +192,9 @@ int main(int argc, char*argv[])
         		memcpy(g_udp,UDP_HEADER,3);
 			 	g_udp[3]=1;
 			 	g_udp[4]=0;
-			 	byte_to_int(g_state.relay_mask,g_udp+5);
-				byte_to_int(g_state.temperature,g_udp+7);
-				byte_to_int(g_state.wetness,g_udp+9);
+			 	int_to_byte(g_state.relay_mask,g_udp+5);
+				int_to_byte(g_state.temperature,g_udp+7);
+				int_to_byte(g_state.wetness,g_udp+9);
 				send_udp(g_udp,32,false);
         	}
         }
@@ -240,14 +244,6 @@ int main(int argc, char*argv[])
 	 			g_buf_tail=(g_buf_tail+16)&0x1023;
 	 		}
         }
-        else if(FD_ISSET(connfd,&exception_fds)) //Òì³£ÊÂ¼þ
-        {
-            ret = recv(g_uart,g_udp_buf,256,MSG_OOB);
-            if(ret <= 0)
-            {
-                break;
-            }
-        }
         
     }
 
@@ -280,7 +276,7 @@ int send_udp(char *buf, int len, bool waitResponse)
 	
 	if(waitResponse)
 	{
-		buflen=recvfrom(g_sock,buf,sizeof(buf),0,(struct sockaddr *)&g_server_addr,&addrlen);
+		buflen=recvfrom(g_sock,buf,sizeof(buf),0,(struct sockaddr *)&g_server_addr,(socklen_t*)&addrlen);
 		close(g_sock);
 		return buflen;
 	}
@@ -302,7 +298,7 @@ void process_udp_cmd(char *buf, int len)
 		g_temp[1]=1;
 		g_temp[2]=buf[6];
 		g_temp[3]=buf[7];
-		fill_uart_check(g_temp);
+		fill_uart_cmd_check(g_temp);
 		write(g_uart,g_temp,16);
 		break;
 	case 2:
@@ -316,7 +312,7 @@ void process_udp_cmd(char *buf, int len)
 		// forward to arduino
 		init_uart_cmd(g_temp);
 		g_temp[1]=2;
-		fill_uart_check(g_temp);
+		fill_uart_cmd_check(g_temp);
 		write(g_uart,g_temp,16);
 		break;
 	case 3:
@@ -331,14 +327,14 @@ void process_udp_cmd(char *buf, int len)
 		// forward to arduino
 		init_uart_cmd(g_temp);
 		g_temp[1]=3;
-		fill_uart_check(g_temp);
+		fill_uart_cmd_check(g_temp);
 		write(g_uart,g_temp,16);
 		break;
 	case 4:
 		// forword to arduino
 		init_uart_cmd(g_temp);
 		g_temp[1]=4;
-		fill_uart_check(g_temp);
+		fill_uart_cmd_check(g_temp);
 		write(g_uart,g_temp,16);
 		break;
 	default:
