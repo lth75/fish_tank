@@ -23,6 +23,42 @@ struct tag_board_state {
 	int wetness;
 	bool is_connected;
 } g_state;
+
+void print_state(struct tag_board_state* state_ptr, const char *str)
+{
+	if(str)
+		printf("%s",str);
+	printf("\trelay mask:%x\n",state_ptr->relay_mask);
+	printf("\ttemperature:%f\n",state_ptr->temperature/10.0);
+	printf("\ttemperature:%f\n",state_ptr->wetness/10.0);
+	printf("\tis_connected:%d\n",state_ptr->is_connected);
+}
+
+void print_udp(unsigned char *buf)
+{
+	printf("udp 0:");
+	for(int i=0;i<16;i++)
+		printf("%02x ",(unsigned char)buf[i]);
+	printf("\nudp 1:");
+	for(int i=16;i<32;i++)
+		printf("%02x ",(unsigned char)buf[i]);
+	printf("\n");
+}
+
+int bytes_to_int(unsigned char *buf)
+{
+	int ret=(buf[1]);
+	ret<<=8;
+	ret+=(buf[0]);
+	return ret;
+}
+
+void int_to_bytes(unsigned char *buf, int value)
+{
+	buf[0]=(unsigned char)(value&0xff);
+	buf[1]=(unsigned char)(value>>8);
+}
+
 int main()
 {
 	memset(&g_state,0,sizeof(g_state));
@@ -42,10 +78,17 @@ int main()
 	else 
 	  printf("%s\n","bind succeeded");
 	
+	peerlen=sizeof(addr_from);
 	while(true)
 	{
 		buflen=recvfrom(serverSocket,(char*)g_buf,sizeof(g_buf),0,(struct sockaddr *)&addr_from,(socklen_t*)&peerlen);
+#ifdef X86_SIM		
+		print_udp(g_buf);
+		if(buflen<0)
+			perror("buflen negative:");
+#endif	
 		if(buflen<0) continue;
+
 		if(memcmp(g_buf,UDP_HEADER,3)!=0)
 			continue;
 		if(g_buf[3]>=1)
@@ -55,21 +98,24 @@ int main()
 			// handle message
 			switch(g_buf[4])
 			{
-			case 0: // initial connect, 
-				g_state.relay_mask=g_buf[6]*256+g_buf[5];
-				g_state.temperature=g_buf[8]*256+g_buf[7];
-				g_state.wetness=g_buf[10]*256+g_buf[9];
-				g_state.is_connected=true;
-				break;
 			case 1: // data report
 				switch(g_buf[5])
 				{
+				case 0: // initial connect, 
+#ifdef X86_SIM
+					printf("initial state request from rpi received\n");
+#endif			
+					g_state.relay_mask=bytes_to_int(g_buf+6);
+					g_state.temperature=bytes_to_int(g_buf+8);
+					g_state.wetness=bytes_to_int(g_buf+10);
+					g_state.is_connected=true;
+					break;
 				case 2:
-					g_state.relay_mask=g_buf[7]*256+g_buf[6];
+					g_state.relay_mask=bytes_to_int(g_buf+6);
 					break;
 				case 3:
-					g_state.temperature=g_buf[7]*256+g_buf[6];
-					g_state.wetness=g_buf[9]*256+g_buf[8];
+					g_state.temperature=bytes_to_int(g_buf+6);
+					g_state.wetness=bytes_to_int(g_buf+8);
 					break;
 				default:
 					;// unknown command received
@@ -77,7 +123,10 @@ int main()
 				break;
 			default:
 				;
-			}			
+			}		
+#ifdef X86_SIM				
+			print_state(&g_state,"state after rpi msg\n");
+#endif			
 		}	
 		else // data from web server
 		{
@@ -96,33 +145,40 @@ int main()
 					else
 						g_state.relay_mask&=~mask;
 				}
-				memcpy(g_cmd,UDP_HEADER,3);
-				g_cmd[3]=1;
-				g_cmd[4]=1;
-				memcpy(g_cmd+5,g_buf+1,16);
+				memcpy(g_cmd,g_buf,32);
 				sendto(serverSocket,g_cmd,32,0,(struct sockaddr*)&pi_addr,pi_addr_len);
 				break;
 			case 2: // read relay
+				memcpy(g_cmd,g_buf,32);
 				memcpy(g_cmd,UDP_HEADER,3);
 				g_cmd[3]=1;
 				g_cmd[4]=1;
 				g_cmd[5]=2;
-				g_cmd[6]=(unsigned char)(0xff&g_state.relay_mask);
-				g_cmd[7]=(unsigned char)(0xff&(g_state.relay_mask>>8));
 				sendto(serverSocket,g_cmd,32,0,(struct sockaddr*)&pi_addr,pi_addr_len);
+				// response to server
+				memcpy(g_cmd,UDP_HEADER,3);
+				g_cmd[3]=1;
+				g_cmd[4]=1;
+				g_cmd[5]=2;
+				int_to_bytes(g_cmd+6,g_state.relay_mask);
+				sendto(serverSocket,g_cmd,32,0,(struct sockaddr *)&addr_from,peerlen);
 				break;
 			case 3: // read temperature and wetness
 				memcpy(g_cmd,UDP_HEADER,3);
 				g_cmd[3]=1;
 				g_cmd[4]=1;
 				g_cmd[5]=3;
-				g_cmd[6]=g_state.temperature&0xff;
-				g_cmd[7]=(g_state.temperature>>8)&0xff;
-				g_cmd[8]=g_state.wetness&0xff;
-				g_cmd[9]=(g_state.temperature>>8)&0xff;
 				sendto(serverSocket,g_cmd,32,0,(struct sockaddr*)&pi_addr,pi_addr_len);
+				// response to server
+				memcpy(g_cmd,UDP_HEADER,3);
+				g_cmd[3]=1;
+				g_cmd[4]=1;
+				g_cmd[5]=3;
+				int_to_bytes(g_cmd+6,g_state.temperature);
+				int_to_bytes(g_cmd+8,g_state.wetness);
+				sendto(serverSocket,g_cmd,32,0,(struct sockaddr *)&addr_from,peerlen);
 				break;
-				case 4: // fish food delivery
+			case 4: // fish food delivery
 				memcpy(g_cmd,UDP_HEADER,3);
 				g_cmd[3]=1;
 				g_cmd[4]=1;

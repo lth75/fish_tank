@@ -161,7 +161,7 @@ int main(int argc, char*argv[])
         //  FD_SET(g_sock,&exception_fds);
         wait_time.tv_sec=5;
 	 	wait_time.tv_usec=0;
-        ret = select(g_uart+1,&read_fds,NULL,NULL,&wait_time);
+        ret = select((g_uart>g_sock)? g_uart+1:g_sock+1,&read_fds,NULL,NULL,&wait_time);
         if(ret < 0)
         {
             printf("Fail to select!\n");

@@ -3,6 +3,10 @@ UDP buf, 32 bytes:
 3:  addr, 0 for cgi and 1 for rpi
 4: must be 1 for now
 5: cmd 1,2,3,4
+cmd 0: init system state
+	6-7: relay mask, little endian
+	8-9: temperature, little endian , temperature=value/10
+	10-11: tds, little endian, tds=value/10
 cmd 1: set relay
 	6: relay index starting from 0
 	7: 1 for on and 0 for off
