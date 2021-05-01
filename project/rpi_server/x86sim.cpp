@@ -5,12 +5,13 @@
 #include <fcntl.h> 
 #include <stdlib.h> 
 #include <string.h>
+#define UART_NAME "/dev/ttyS10"
 int serialOpen(const char *dev, int baud)
 {
-	int fd=open("/dev/pts/20",O_RDWR|O_NOCTTY|O_NDELAY);
+	int fd=open(UART_NAME,O_RDWR|O_NOCTTY|O_NDELAY);
 	if(fd==-1)
 	{
-		printf("unable to open tty:%s\n",dev);
+		printf("unable to open tty:%s\n",UART_NAME);
 		return -1;
 	}
 	if(isatty(fd)==0)

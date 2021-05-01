@@ -1,3 +1,5 @@
+UART HEADER 0xf5
+
 UDP buf, 32 bytes:
 0-2: header, 'Ian'
 3:  addr, 0 for cgi and 1 for rpi
@@ -18,7 +20,7 @@ cmd 3: read tds and temperature sensor
 cmd 4: fish food delivery
 30-31: crc of the whole buffer
 
-UDP buf, 16 tyes:
+UART buf, 16 tyes:
 0: header 0xf5
 1: cmd 1,2,3,4	
 cmd 1: set relay
