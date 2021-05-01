@@ -1,0 +1,2 @@
+export REQUEST_METHOD="POST"
+export CONTENT_LENGTH=23

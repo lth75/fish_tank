@@ -1,0 +1,28 @@
+UDP buf, 32 bytes:
+0-2: header, 'Ian'
+3:  addr, 0 for cgi and 1 for rpi
+4: must be 1 for now
+5: cmd 1,2,3,4
+cmd 1: set relay
+	6: relay index starting from 0
+	7: 1 for on and 0 for off
+cmd 2: read relay status
+	6-7: relay mask, little endian
+cmd 3: read tds and temperature sensor
+	6-7: temperature, little endian , temperature=value/10
+	8-9: tds, little endian, tds=value/10
+cmd 4: fish food delivery
+30-31: crc of the whole buffer
+
+UDP buf, 16 tyes:
+0: header 0xf5
+1: cmd 1,2,3,4	
+cmd 1: set relay
+	2: relay index
+	3: 1 for on and 0 for off
+cmd 2: read relay status
+	2-3: relay mask, little endian
+cmd 3: read tds and temperature sensor
+	2-3: temperature, little endian , temperature=value/10
+	4-5: tds, little endian, tds=value/10
+15: check byte, equals to the xor of bytes 0-14

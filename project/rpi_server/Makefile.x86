@@ -1,0 +1,20 @@
+CLFLAGS = -g -I. -c -DX86_SIM
+LDFLAGS = -lc -lm
+
+all:rpi_server
+
+rpi_server: rpi_server.o x86sim.o
+	gcc  -o rpi_server x86sim.o rpi_server.o $(LDFLAGS)
+
+#cloud_cgi.o: cloud_cgi.cpp
+.cpp.o:
+	g++ $(CLFLAGS) -o $@ $< 
+
+.c.o :
+# cJSON.o: cJSON.c
+	gcc $(CLFLAGS) -o $@ $< 
+
+
+clean:
+	rm *.o
+	rm cloud_cgi 
